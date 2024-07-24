@@ -62,7 +62,9 @@ unzip -qq -o $GEOIP_COUNTRIES_ZIP
 rm -rf $GEOIP_COUNTRIES
 mv GeoLite2-Country-CSV_* $GEOIP_COUNTRIES
 
-find "$COUNTRIES"/*.txt -nowarn -delete # delete old entries
+# delete old entries
+find "$COUNTRIES"/*.txt -nowarn -delete
+find "$CONTINENTS"/*.txt -nowarn -delete
 
 echo "Generating files:"
 
