@@ -10,7 +10,7 @@ CONTINENTS="${BASE_DIR}/output/continents"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -o|--out)        # Output directory of subnets
+        -o|--out|--countries)        # Output directory of subnets
             COUNTRIES="$2"
             shift
             shift
