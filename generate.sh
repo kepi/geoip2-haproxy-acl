@@ -1,14 +1,23 @@
 #!/usr/bin/env bash
 
-COUNTRIES="/tmp/countries"
-COUNTRIES_ZIP="/var/cache/geoip/countries.zip"
-SUBNETS="subnets"
+BASE_DIR=$(dirname $0)
 YOUR_LICENSE_KEY=""
+
+GEOIP_COUNTRIES_ZIP="${BASE_DIR}/output/geoip_countries.zip"
+GEOIP_COUNTRIES="${BASE_DIR}/output/geoip_countries"
+
+COUNTRIES="${BASE_DIR}/output/countries"
+CONTINENTS="${BASE_DIR}/output/continents"
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         -o|--out)        # Output directory of subnets
-            SUBNETS="$2"
+            COUNTRIES="$2"
+            shift
+            shift
+            ;;
+        --continents)        # Output directory of subnets
+            CONTINENTS="$2"
             shift
             shift
             ;;
@@ -27,39 +36,40 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [ -z $YOUR_LICENSE_KEY ]; then
+mkdir -p "output" "$COUNTRIES" "$CONTINENTS"
+
+if [ -z "$YOUR_LICENSE_KEY" ]; then
     echo "MaxMind license key must be set via --liecense parameter. See --help for more.";
     exit 1;
 fi
 
 # make sure the zip file exists and is recent enough to use
-if [ ! $(find $COUNTRIES_ZIP -mtime -7 2>/dev/null) ]; then
+if ! find "$GEOIP_COUNTRIES_ZIP" -mtime -7 2>/dev/null; then
     # remove it if it exists
-    rm -f $COUNTRIES_ZIP
+    rm -f "$GEOIP_COUNTRIES_ZIP"
 
     # download a new copy
     echo "Downloading https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-Country-CSV&license_key=xxxxx&suffix=zipGeoLite2-Country-CSV..."
-    wget -q -O $COUNTRIES_ZIP "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-Country-CSV&license_key=$YOUR_LICENSE_KEY&suffix=zip"
 
     # abort the script if the download failed
-    if [ "$?" != 0 ]; then
+    if ! wget -q -O "$GEOIP_COUNTRIES_ZIP" "https://download.maxmind.com/app/geoip_download?edition_id=GeoLite2-Country-CSV&license_key=$YOUR_LICENSE_KEY&suffix=zip"; then
         echo "Error downloading file"
         exit 1
     fi
 fi
 
-unzip -qq -o $COUNTRIES_ZIP
+unzip -qq -o $GEOIP_COUNTRIES_ZIP
 
-rm -rf $COUNTRIES
-mv GeoLite2-Country-CSV_* $COUNTRIES
+rm -rf $GEOIP_COUNTRIES
+mv GeoLite2-Country-CSV_* $GEOIP_COUNTRIES
 
-mkdir -p $SUBNETS
-rm -f $SUBNETS/*.txt # delete old entries
+find "$COUNTRIES"/*.txt -delete # delete old entries
 
 echo "Generating files:"
-# generate subnets/COUNTRYCODE.txt files and fill it with subnets
-IFS=","
-while read geoname_id locale_code continent_code continent_name country_iso_code country_name is_in_european_union
+
+# generate countries/COUNTRYCODE.txt files and fill it with subnets
+# generate continents/CONTINENTCODE.txt files and fill it with subnets
+while IFS="," read -r geoname_id _locale_code continent_code _continent_name country_iso_code _country_name _is_in_european_union
 do
     if [ ! "$country_iso_code" ]; then
         continue
@@ -70,15 +80,13 @@ do
     fi
 
     # IPv4
-    for v in $(cat $COUNTRIES/GeoLite2-Country-Blocks-IPv4.csv | grep $geoname_id | sed "s/,.*$//g" | awk "{print \$1}")
-    do
-        echo "$v" >> "${SUBNETS}/${country_iso_code}.txt"
-    done
+    awk -F, -v geoname="$geoname_id" \
+        '$2 == geoname { print $1 }' \
+        "${GEOIP_COUNTRIES}/GeoLite2-Country-Blocks-IPv4.csv" | \
+        tee -a "${COUNTRIES}/${country_iso_code}.txt" >> "${CONTINENTS}/${continent_code}.txt"
+    echo "Country ${country_iso_code} in ${continent_code} done."
 
-    echo "${SUBNETS}/${country_iso_code}.txt"
-done < $COUNTRIES/GeoLite2-Country-Locations-en.csv
-
-rm -rf $COUNTRIES
+done < "$GEOIP_COUNTRIES/GeoLite2-Country-Locations-en.csv"
 
 echo "Done."
 
