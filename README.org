@@ -1,0 +1,96 @@
+#+TITLE: geoip2-haproxy-acl
+
+GeoIP2 country and continent blocking with HAProxy.
+
+This script downloads GeoLite2 country CSV and splits it into per-country and
+per-continent files. Output is compatible with HAProxy ACL (Access Control
+Lists).
+
+* Example output
+#+begin_example
+./output/countries
+ |- AD.txt
+ |- AE.txt
+ |- ...
+ |- CN.txt
+ |- ...
+ |- US.txt
+ |- ...
+ |- ZM.txt
+ |- ZW.txt
+./output/continents
+ |- AF.txt
+ |- AN.txt
+ |- AS.txt
+ |- EU.txt
+ |- NA.txt
+ |- OC.txt
+ |- SA.txt
+#+end_example
+
+* List of countries
+Maxmind is using [[https://en.wikipedia.org/wiki/List_of_ISO_3166_country_codes][ISO 3166 country codes]].
+
+* Continent codes
+| Code | Continent     |
+|------+---------------|
+| AF   | Africa        |
+| AS   | Asia          |
+| EU   | Europe        |
+| NA   | North America |
+| SA   | South America |
+| OC   | Oceania       |
+| AN   | Antarctica    |
+
+* Usage
+
+** MaxMind License Key
+MaxMind requires a registration in order to download free GeoIP2 databases.
+
+Register at [[maxmind.com]], then go to /My account/ → /Manage License Keys/ → /Generate new license key/.
+
+** Pull latest GeoIP2 data
+#+begin_src sh
+git clone https://github.com/kepi/geoip2-haproxy-acl.git
+cd geoip2-haproxy-acl
+mkdir -p /etc/haproxy/geoip2
+export MAXMIND_LICENSE="your generated maxmind license key"
+./generate.sh
+#+end_src
+
+This script generates =output/countries= and =output/continents= directories.
+
+You can also choose different output directories, i.e. those used in ACL example later:
+
+ #+begin_src sh
+ ./generate.sh --countries /etc/haproxy/acl.lists/countries --continents /etc/haproxy/acl.lists/continents
+ #+end_src
+
+** Add ACL to HAProxy
+*** Block access from RU
+
+#+begin_src config
+acl acl_country_RU src -f /etc/haproxy/acl.lists/countries/RU.txt
+http-request deny if acl_country_RU
+#+end_src
+
+*** Allow access only from EU continent
+#+begin_src config
+acl acl_continent_EU src -f /etc/haproxy/acl.lists/continents/EU.txt
+http-request deny if !acl_continent_EU
+#+end_src
+
+
+** Cron
+GeoLite2 Country database is [[https://dev.maxmind.com/geoip/geoip2/geolite2/][updated weekly, every Tuesday]].
+
+Add the following cron job if you wish to stay up to date (replace =/path/to/=
+with your script path). It pulls latest updates every Wednesday at 06:00 AM.
+
+#+begin_src conf
+0 6 * * 3 /path/to/geoip2-haproxy-acl/generate.sh --license "your generated maxmind license key" --countries /etc/haproxy/acl.lists/countries --continents /etc/haproxy/acl.lists/continents && /bin/systemctl reload haproxy
+#+end_src
+
+* License
+
+See [[./LICENSE][LICENSE]].
